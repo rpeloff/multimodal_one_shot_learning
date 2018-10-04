@@ -1,0 +1,31 @@
+# Ignore everything:
+*
+
+# Except for these files:
+# Re-include all directories (& sub-dirs) so they may be examined for the exceptions that follow
+!*/
+# Don't ignore the .gitignore!
+!.gitignore
+# Python
+!*.py
+# Cython
+!*.pyx
+# Markdown
+!*.md
+# Shell
+!*.sh
+# IPython Notebooks
+!*.ipynb
+# Dockerfile
+!docker/*
+# License
+!LICENSE
+
+# Files to ignore that were re-included in exceptions:
+# IPython Notebook Checkpoints
+*.ipynb_checkpoints*
+
+# Ignore extracted features from TIDigits
+kaldi_features/tidigits/features/*
+kaldi_features/tidigits/logs/*
+kaldi_features/tidigits/tidigits_audio.npz
