@@ -37,26 +37,6 @@ while getopts ":p:-:h" opt; do
                         JUP_PORT=$val  # assign port value
                     fi
 		            ;;
-                tidigits|tidigits=*)
-                    val=${OPTARG#tidigits}
-                    val=${val#*=}
-                    opt=${OPTARG%=$val}
-                    if [ -z "${val}" ]; then
-                        echo "Option --${opt} is missing the directory argument!" >&2 && print_help_and_exit=true
-                    else
-                        TIDIGITS_DIR=$val
-                    fi
-                    ;;
-                flickr-audio|flickr-audio=*)
-                    val=${OPTARG#flickr-audio}
-                    val=${val#*=}
-                    opt=${OPTARG%=$val}
-                    if [ -z "${val}" ]; then
-                        echo "Option --${opt} is missing the directory argument!" >&2 && print_help_and_exit=true
-                    else
-                        FLICKR_DIR=$val
-                    fi
-                    ;;
                 name|name=*)
                     val=${OPTARG#name}
                     val=${val#*=}
@@ -91,8 +71,6 @@ if [ "${print_help_and_exit}" = true ]; then
     echo ""
     echo "Options:"
     echo "    -p, --port number         The port the notebook server will listen on (Default: 8888)."
-    echo "        --tidigits dir        Path to the TIDigits data."
-    echo "        --flickr-audio dir    Path to the Flickr-Audio data."
     echo "        --name string         Name for the Docker container (Default: multimodal-one-shot)."
     echo "    -h, --help                Print this information and exit."
     echo ""
@@ -100,10 +78,6 @@ if [ "${print_help_and_exit}" = true ]; then
 fi
 
 
-# Set the location of the TIDigits dataset (default dir used as example)
-TIDIGITS_DIR=${TIDIGITS_DIR:-/home/rpeloff/datasets/speech/tidigits}
-# Set the location of the Flickr-Audio dataset (default dir used as example)
-FLICKR_DIR=${FLICKR_DIR:-/home/rpeloff/datasets/speech/flickr_audio}
 # Set local notebook port (default port: 8888)
 JUP_PORT=${JUP_PORT:-8888}
 # Set name of docker container (default name: multimodal-one-shot)
@@ -113,8 +87,6 @@ DOCKER_NAME=${DOCKER_NAME:-multimodal-one-shot}
 # Print some information on selected options
 echo "Starting experiment notebook container!"
 echo ""
-echo "TIDigits directory: ${TIDIGITS_DIR}"
-echo "Flickr-Audio directory: ${FLICKR_DIR}"
 echo "Jupyter notebook port: ${JUP_PORT}"
 echo "Docker container name: ${DOCKER_NAME}"
 echo ""
@@ -122,10 +94,9 @@ echo ""
 
 # Start Docker research container
 # Note: run script as sudo if Docker not set up for non-root user
-nvidia-docker run \ 
+nvidia-docker run \
     -v `pwd`/src:/src \
-    -v ${TIDIGITS_DIR}:/tidigits \
-    -v ${FLICKR_DIR}:/flickr_audio \
+    -v `pwd`/kaldi_features:/kaldi_features \
     -v `pwd`/experiments:/experiments \
     --rm \
     -it \
