@@ -7,28 +7,35 @@
 # Date: September 2018
 
 # ------------------------------------------------------------------------------
-# Install pip and numpy(==1.15.0):
+# Install pip and required python packages
 # ------------------------------------------------------------------------------
 apt-get update -y \
     && apt-get install -y --no-install-recommends python-pip \
-    && python -m pip install numpy==1.15.0
+    && python -m pip install --upgrade setuptools wheel \
+    && python -m pip install \
+        numpy==1.15.0 \
+        pillow==5.3.0 \
+        matplotlib==2.2.3 \
+        nltk==3.3.0
+python -c "import nltk; nltk.download('stopwords')"
 
 # ------------------------------------------------------------------------------
 # Prepare Kaldi tools for feature extraction:
 # ------------------------------------------------------------------------------
-# Copy Kaldi example scripts for TIDigits to /tmp/kaldi/tidigits
-mkdir -p /tmp/kaldi/tidigits
-cp -rL /kaldi/egs/tidigits/s5/* /tmp/kaldi/tidigits/
-cd /tmp/kaldi/tidigits  # work in temporary directory
-# Set Kaldi train and decode commands (see cmd.sh kaldi/egs/tidigits/s5)
+# Copy Kaldi example scripts to /tmp/kaldi
+mkdir -p /tmp/kaldi
+cp -rL /kaldi/egs/tidigits/s5/* /tmp/kaldi/  # from tidigits not wsj for scripts in local/
+cd /tmp/kaldi  # work in temporary directory
+# Set Kaldi train and decode commands (see cmd.sh kaldi/egs/wsj/s5)
 echo '
     export train_cmd=run.pl
-    export decode_cmd=run.pl' > cmd.sh
-# Set Kaldi tools path (from updated path.sh in kaldi/egs/tidigits/s5)
+    export decode_cmd=run.pl
+    export mkgraph_cmd=run.pl' > cmd.sh
+# Set Kaldi tools path (from updated path.sh in kaldi/egs/wsj/s5)
 echo '
     export KALDI_ROOT=/kaldi
     [ -f $KALDI_ROOT/tools/env.sh ] && . $KALDI_ROOT/tools/env.sh
-    export PATH=/tmp/kaldi/tidigits/utils:$KALDI_ROOT/tools/openfst/bin:/tmp/kaldi/tidigits:$PATH
+    export PATH=/tmp/kaldi/utils:$KALDI_ROOT/tools/openfst/bin:/tmp/kaldi:$PATH
     [ ! -f $KALDI_ROOT/tools/config/common_path.sh ] \
         && echo >&2 "The standard file ${KALDI_ROOT}/tools/config/common_path.sh is not present -> Exit!" \
         && exit 1
@@ -37,6 +44,8 @@ echo '
 source cmd.sh
 source path.sh  # many scripts depend on this file being present in cwd
 
+# ==============================================================================
+#                                    TIDIGITS
 # ------------------------------------------------------------------------------
 # Prepare feature data directories:
 # ------------------------------------------------------------------------------
@@ -51,7 +60,7 @@ mkdir -p $tidigits_feats/logs
 #   Apache 2.0.
 # ------------------------------------------------------------------------------
 # Create TIDIgits temporary data directories
-tmpdir=/tmp/kaldi/tidigits/data
+tmpdir=/tmp/kaldi/tidigits
 mkdir -p $tmpdir/train
 mkdir -p $tmpdir/test
 mkdir -p $tmpdir/local/data
@@ -101,7 +110,7 @@ for set in train test; do
         < $tmpdir/$set/wav.scp \
         > $tmpdir/$set/utt2spk
     # Create file that maps from speaker to utterance-list
-    /tmp/kaldi/tidigits/utils/utt2spk_to_spk2utt.pl \
+    /tmp/kaldi/utils/utt2spk_to_spk2utt.pl \
         < $tmpdir/$set/utt2spk \
         > $tmpdir/$set/spk2utt
 done
@@ -116,7 +125,7 @@ for set in train test; do
     mkdir -p $tidigits_feats/logs/make_cmvn_dd/$set
     mkdir -p $tidigits_feats/features/mfcc
     # Get raw MFCC features
-    /tmp/kaldi/tidigits/steps/make_mfcc.sh \
+    /tmp/kaldi/steps/make_mfcc.sh \
         --cmd $train_cmd \
         --mfcc-config $tidigits_feats/conf/mfcc.conf \
         --nj $N_CPU_CORES \
@@ -127,7 +136,7 @@ for set in train test; do
         > $tidigits_feats/features/mfcc/raw_mfcc_$set.scp
     rm $tidigits_feats/features/mfcc/raw_mfcc_$set.*.scp
     # Calc cmvn stats
-    /tmp/kaldi/tidigits/steps/compute_cmvn_stats.sh \
+    /tmp/kaldi/steps/compute_cmvn_stats.sh \
         $tmpdir/$set \
         $tidigits_feats/logs/make_mfcc/$set \
         $tidigits_feats/features/mfcc
@@ -151,7 +160,7 @@ for set in train test; do
     mkdir -p $tidigits_feats/logs/make_fbank/$set
     mkdir -p $tidigits_feats/features/fbank
     # Get Filterbank features
-    /tmp/kaldi/tidigits/steps/make_fbank.sh \
+    /tmp/kaldi/steps/make_fbank.sh \
         --compress false \
         --cmd $train_cmd \
         --fbank-config $tidigits_feats/conf/fbank.conf \
@@ -210,5 +219,125 @@ $tidigits_feats/combine_archives.py \
     --fbank-test=$tidigits_feats/features/fbank/raw_fbank_test_indiv.npz \
     --out-file $tidigits_feats/tidigits_audio.npz
 
-# Post debug
-bash
+
+# ==============================================================================
+#                                  FLICKR AUDIO
+# ------------------------------------------------------------------------------
+# Prepare feature data directories:
+# ------------------------------------------------------------------------------
+fa_feats=$FEATURES_DIR/flickr_audio
+mkdir -p $fa_feats/features
+mkdir -p $fa_feats/logs
+
+# ------------------------------------------------------------------------------
+# Prepare Flickr-Audio in the format required for Kaldi feature extraction:
+# ------------------------------------------------------------------------------
+# Create flickr-audio temporary data directories
+tmpdir=/tmp/kaldi/flickr_audio
+mkdir -p $tmpdir/train
+mkdir -p $tmpdir/test
+mkdir -p $tmpdir/local/data
+# Make sure that flickr-audio data exists in container at /flickr_audio
+rootdir=/flickr_audio  # set tidigits root data directory
+if ! [ -d $rootdir ]; then 
+    echo "Flickr-Audio directory does not have expected format: ${rootdir}"
+    exit 1
+fi
+# Prepare flickr-audio data
+$fa_feats/flickr8k_data_prep_vad.py \
+    $rootdir \
+    $tmpdir/local/data
+# Get duration of complete corpus:
+cat $tmpdir/local/data/segments \
+    | awk 'BEGIN {sum = 0.0} {sum += $4 - $3} \
+           END {printf "Total duration: %.6f hours\n", sum/60.0/60.0}'
+
+# ------------------------------------------------------------------------------
+# Extract Flickr-Audio MFCC features for each spoken utterance as a whole:
+# ------------------------------------------------------------------------------
+# Create feature and log directories
+mkdir -p $fa_feats/logs/make_mfcc/full_vad
+mkdir -p $fa_feats/logs/make_cmvn_dd/full_vad
+mkdir -p $fa_feats/features/mfcc
+# Get raw MFCC features
+/tmp/kaldi/steps/make_mfcc.sh \
+    --cmd $train_cmd \
+    --mfcc-config $fa_feats/conf/mfcc.conf \
+    --nj $N_CPU_CORES \
+    $tmpdir/local/data \
+    $fa_feats/logs/make_mfcc/full_vad \
+    $fa_feats/features/mfcc
+# Calc cmvn stats
+/tmp/kaldi/steps/compute_cmvn_stats.sh \
+    $tmpdir/local/data \
+    $fa_feats/logs/make_mfcc/full_vad \
+    $fa_feats/features/mfcc
+# Make MFCC feature with deltas
+$fa_feats/cmvn_dd.sh \
+    --cmd $train_cmd \
+    --nj $N_CPU_CORES \
+    $tmpdir/local/data \
+    $fa_feats/logs/make_cmvn_dd/full_vad \
+    $fa_feats/features/mfcc
+cat $fa_feats/features/mfcc/mfcc_cmnv_dd_data.*.scp \
+    > $fa_feats/features/mfcc/mfcc_cmnv_dd_full_vad.scp
+rm $fa_feats/features/mfcc/mfcc_cmnv_dd_data.*.scp
+
+# ------------------------------------------------------------------------------
+# Extract Flickr-Audio Filterbank features for each spoken utterance as a whole:
+# ------------------------------------------------------------------------------
+# Create feature and log directories
+mkdir -p $fa_feats/logs/make_fbank/$set
+mkdir -p $fa_feats/features/fbank
+# Get Filterbank features
+/tmp/kaldi/steps/make_fbank.sh \
+    --compress false \
+    --cmd $train_cmd \
+    --fbank-config $fa_feats/conf/fbank.conf \
+    --nj $N_CPU_CORES \
+    $tmpdir/local/data \
+    $fa_feats/logs/make_fbank/full_vad \
+    $fa_feats/features/fbank
+cat $fa_feats/features/fbank/raw_fbank_data.*.scp \
+    > $fa_feats/features/fbank/raw_fbank_full_vad.scp
+rm $fa_feats/features/fbank/raw_fbank_data.*.scp
+
+# ------------------------------------------------------------------------------
+# Convert to NumPy archives with train-test-dev splits of Flickr-8k-Text corpus:
+# ------------------------------------------------------------------------------
+$fa_feats/get_kaldi_fbank.py \
+    /Flickr8k_text \
+    $fa_feats/features/fbank \
+    raw_fbank_full_vad.scp
+$fa_feats/get_kaldi_mfcc.py \
+    /Flickr8k_text \
+    $fa_feats/features/mfcc \
+    mfcc_cmnv_dd_full_vad.scp
+
+# ------------------------------------------------------------------------------
+# Split each subset into isolated words:
+# ------------------------------------------------------------------------------
+for set in dev train test; do
+    $fa_feats/get_iso_words.py \
+        $rootdir \
+        $fa_feats/features \
+        mfcc \
+        $set
+    $fa_feats/get_iso_words.py \
+        $rootdir \
+        $fa_feats/features \
+        fbank \
+        $set
+done
+
+# ------------------------------------------------------------------------------
+# Combine Flickr-Audio features into single numpy archive for easy retrieval:
+# ------------------------------------------------------------------------------
+$fa_feats/combine_archives.py \
+    --mfcc-train=$fa_feats/features/mfcc/train_words.npz \
+    --mfcc-dev=$fa_feats/features/mfcc/dev_words.npz \
+    --mfcc-test=$fa_feats/features/mfcc/test_words.npz \
+    --fbank-train=$fa_feats/features/fbank/train_words.npz \
+    --fbank-dev=$fa_feats/features/fbank/dev_words.npz \
+    --fbank-test=$fa_feats/features/fbank/test_words.npz \
+    --out-file $fa_feats/flickr_audio.npz

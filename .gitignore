@@ -14,6 +14,10 @@
 !*.md
 # Shell
 !*.sh
+# Config file
+!*.conf
+# Forced alignments
+!*.ctm
 # IPython Notebooks
 !*.ipynb
 # Dockerfile

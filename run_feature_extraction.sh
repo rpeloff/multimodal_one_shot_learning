@@ -44,6 +44,16 @@ while getopts ":-:h" opt; do
                         FLICKR_DIR=$val
                     fi
                     ;;
+                flickr-text|flickr-text=*)
+                    val=${OPTARG#flickr-text}
+                    val=${val#*=}
+                    opt=${OPTARG%=$val}
+                    if [ -z "${val}" ]; then
+                        echo "Option --${opt} is missing the directory argument!" >&2 && print_help_and_exit=true
+                    else
+                        FLICKR_TEXT_DIR=$val
+                    fi
+                    ;;
                 n-cpu-cores|n-cpu-cores=*)
                     val=${OPTARG#n-cpu-cores}
                     val=${val#*=}
@@ -89,6 +99,7 @@ if [ "${print_help_and_exit}" = true ]; then
     echo "Options:"
     echo "        --tidigits dir        Path to the TIDigits data."
     echo "        --flickr-audio dir    Path to the Flickr-Audio data."
+    echo "        --flickr-text dir     Path to the Flickr 8k text caption corpus."
     echo "        --n-cpu-cores         Number of CPU cores to use during feature extraction."
     echo "        --name string         Name for the Docker container (Default: kaldi-feats-extract)."
     echo "    -h, --help                Print this information and exit."
@@ -101,6 +112,8 @@ fi
 TIDIGITS_DIR=${TIDIGITS_DIR:-/home/rpeloff/datasets/speech/tidigits}
 # Set the location of the Flickr-Audio dataset (default dir used as example)
 FLICKR_DIR=${FLICKR_DIR:-/home/rpeloff/datasets/speech/flickr_audio}
+# Set the location of the Flickr 8k caption corpus (default dir used as example)
+FLICKR_TEXT_DIR=${FLICKR_TEXT_DIR:-/home/rpeloff/datasets/text/Flickr8k_text}
 # Set number of CPU cores to use during feature extraction (default: 8)
 N_CPU_CORES=${N_CPU_CORES:-8}
 # Set name of docker container (default name: kaldi-feats-extract)
@@ -112,6 +125,7 @@ echo "Starting experiment notebook container!"
 echo ""
 echo "TIDigits directory: ${TIDIGITS_DIR}"
 echo "Flickr-Audio directory: ${FLICKR_DIR}"
+echo "Flickr 8k text directory: ${FLICKR_TEXT_DIR}"
 echo "Number of CPU cores: ${N_CPU_CORES}"
 echo "Docker container name: ${DOCKER_NAME}"
 echo ""
@@ -122,11 +136,13 @@ echo ""
 docker run \
     -v ${TIDIGITS_DIR}:/tidigits \
     -v ${FLICKR_DIR}:/flickr_audio \
+    -v ${FLICKR_TEXT_DIR}:/Flickr8k_text \
     -v `pwd`/kaldi_features:/kaldi_features \
     -e FEATURES_DIR=/kaldi_features \
     -e N_CPU_CORES=${N_CPU_CORES} \
-    --rm \
     -it \
     --name ${DOCKER_NAME} \
     reloff/kaldi:5.4 \
     /kaldi_features/extract_features.sh
+docker logs ${DOCKER_NAME} >& feature_extraction.log
+docker container rm ${DOCKER_NAME}
