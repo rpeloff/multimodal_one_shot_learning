@@ -293,8 +293,8 @@ def build_vision_model(
         x_embed_input = tf.placeholder(TF_FLOAT, model_param_dict['x_input_shape'])
         embedding = tf.layers.flatten(x_embed_input)
     # Check model version and build corresponding model network
-    if (model_version == 'feedforward_softmax' or
-        model_version == 'convolutional_softmax'):
+    elif (model_version == 'feedforward_softmax' or
+          model_version == 'convolutional_softmax'):
         # Use input x_train_data for training if specified, otherwise
         # embedding placeholder input is used during inference
         if training and x_train_data is not None:

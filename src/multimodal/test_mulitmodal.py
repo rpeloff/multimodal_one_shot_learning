@@ -170,7 +170,7 @@ def main():
     # Check if not using a previous run, and create a unique run directory
     if not os.path.exists(os.path.join(test_model_dir, LOG_FILENAME)):
         unique_dir = "{}_{}".format(
-            'multimodal', 
+            'multimodal_test', 
             datetime.datetime.now().strftime("%y%m%d_%Hh%Mm%Ss_%f"))
         test_model_dir = os.path.join(test_model_dir, unique_dir)
 

@@ -371,6 +371,7 @@ def batch_few_shot_episodes(
         z_query_originators=None,
         episode_label_set=None,
         make_matching_set=False,
+        originator_type='different',
         k_shot=1,
         l_way=5,
         n_queries=10,
@@ -475,7 +476,8 @@ def batch_few_shot_episodes(
                         y_query_labels,
                         z_originators=z_query_originators,
                         valid_mask=_get_originator_mask(z_originators, 
-                                                        z_query_originators),
+                                                        z_query_originators,
+                                                        originator_type=originator_type),
                         k_size=n_queries,
                         balanced=make_matching_set,  # NOTE n_queries should equal l_way for matching set
                         seed=seed))
@@ -739,17 +741,18 @@ def _get_all_triplets_from_indices(same_pair_indices, diff_pair_indices, n_max_s
 def _get_originator_mask(
         z_support_set,
         z_query_originators,
-        valid_type='different'):
-    """[summary]
+        originator_type='different'):
+    """Get a boolean mask over query dataset to select instances where originators are valid.
     
-    1. Query and support set originators are always different
-    2. Query originator appears once in support set, but for a different concept
-    3. ?
-    
-    valid_type one of ['different', 'both_once']
+    originator_type one of ['different', 'same']:
+    - 'different': Query and support set originators are always different
+    - 'same': Query originator always appears in support set (not necessarily for matching concept)
     """
     valid_mask = tf.equal(
         tf.expand_dims(z_query_originators, -1), z_support_set)
     valid_mask = tf.reduce_sum(tf.cast(valid_mask, tf.int32), axis=-1)
-    valid_mask = tf.equal(valid_mask, False)
+    if originator_type == 'different':
+        valid_mask = tf.equal(valid_mask, False)
+    elif originator_type == 'same':
+        valid_mask = tf.equal(valid_mask, True)
     return valid_mask

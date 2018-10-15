@@ -122,6 +122,9 @@ def check_arguments():
                         help="Path to store and load vision models "
                              "(defaults to the current working directory)",
                         default='.')
+    parser.add_argument('--no-unique-dir',
+                        action='store_true',
+                        help="Do not create a unique model directory")
     parser.add_argument('--data-dir', 
                         type=os.path.abspath,
                         help="Path to store and load data"
@@ -209,6 +212,12 @@ def check_arguments():
                              "concept in a balanced batch (defaults to {})"
                              "".format(4),
                         default=4)
+    parser.add_argument('--max-offline-pairs',
+                       type=int,
+                       help="Maximum number of same pairs that will be sampled "
+                            "for siamese triplet (offline) model (defaults to "
+                            "100000).",
+                       default=int(100e3))
 
     # --------------------------------------------------------------------------
     # Other common training parameters:
@@ -244,11 +253,12 @@ def main():
     model_dir = ARGS.model_dir
     # Check if not using a previous run, and create a unique run directory
     if not os.path.exists(os.path.join(model_dir, LOG_FILENAME)):
-        unique_dir = "{}_{}_{}".format(
-            'vision',
-            ARGS.model_version, 
-            datetime.datetime.now().strftime("%y%m%d_%Hh%Mm%Ss_%f"))
-        model_dir = os.path.join(model_dir, unique_dir)
+        if not ARGS.no_unique_dir:
+            unique_dir = "{}_{}_{}".format(
+                'vision',
+                ARGS.model_version, 
+                datetime.datetime.now().strftime("%y%m%d_%Hh%Mm%Ss_%f"))
+            model_dir = os.path.join(model_dir, unique_dir)
 
     # Create directories if required ...
     if not os.path.exists(model_dir):
@@ -395,7 +405,8 @@ def main():
         # Triplet sampling from data pipeline for siamese models
         if (ARGS.model_version == 'siamese_triplet'):  
             train_pipeline = data.sample_dataset_triplets(train_pipeline,
-                                                          use_dummy_data=True)
+                                                          use_dummy_data=True,
+                                                          n_max_same_pairs=ARGS.max_offline_pairs)
         train_pipeline = train_pipeline.prefetch(1)  # prefetch 1 batch per step
 
         # --------------------------------------------
@@ -559,7 +570,7 @@ def train_few_shot_model(
             first_saved = best_saver.save(sess, first_path)
             logging.info("Saved randomly initialized base model to file: {}"
                          "".format(first_saved))
-
+    run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
     # Start tf.Session to train and validate model
     with tf.Session() as sess:
         # ----------------------------------------------------------------------
@@ -587,8 +598,8 @@ def train_few_shot_model(
         logging.info("Training from: Epoch: {}\tGlobal Step: {}"
                      .format(start_epoch+1, step))
         best_epoch, best_val_acc = sess.run([epoch_var, accuracy_var])
-        logging.info("Current best model: Epoch: {}\tValidation accuracy: {}"
-                     .format(best_epoch+1, best_val_acc))
+        logging.info("Current best model: Epoch: {}\tValidation accuracy: "
+                     "{:.5f}".format(best_epoch+1, best_val_acc))
 
         # Create session summary writer
         summary_writer = tf.summary.FileWriter(os.path.join(
@@ -645,7 +656,7 @@ def train_few_shot_model(
                     _, loss_val, summary_vals, metric_vals, step = sess.run(
                         [train_optimizer, train_loss, summaries,
                         [m for m in train_metrics.values()], global_step],
-                        feed_dict={train_flag: True})
+                        feed_dict={train_flag: True}, options=run_options)
                     
                     # Write summaries for tensorboard and log some info
                     summary_writer.add_summary(summary_vals, step)
@@ -720,7 +731,7 @@ def train_few_shot_model(
                                    .format(epoch+1, avg_loss, avg_acc))
         # Training complete, print final (best) model stats:
         logging.info("Training complete. Best model found at epoch {} with "
-                     "validation accuracy {}.".format(best_epoch+1, best_val_acc))
+                     "validation accuracy {:.5f}.".format(best_epoch+1, best_val_acc))
 
 
 if __name__ == '__main__':

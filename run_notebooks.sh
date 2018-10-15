@@ -47,6 +47,16 @@ while getopts ":p:-:h" opt; do
                         DOCKER_NAME=$val
                     fi
                     ;;
+                password|password=*)
+                    val=${OPTARG#password}
+                    val=${val#*=}
+                    opt=${OPTARG%=$val}
+                    if [ -z "${val}" ]; then
+                        echo "Option --${opt} is missing the password argument!" >&2 && print_help_and_exit=true
+                    else
+                        JUP_PASS=$val
+                    fi
+                    ;;
 		        help)
 		            print_help_and_exit=true
 		            ;;
@@ -70,8 +80,9 @@ if [ "${print_help_and_exit}" = true ]; then
     echo "Run experiment Notebooks in the Docker research container"
     echo ""
     echo "Options:"
-    echo "    -p, --port number         The port the notebook server will listen on (Default: 8888)."
+    echo "    -p, --port number         Port the Jupyter notebook server will listen on (Default: 8888)."
     echo "        --name string         Name for the Docker container (Default: multimodal-one-shot)."
+    echo "        --password string     Token used to access the Jupyter notebook (Default: No password)."
     echo "    -h, --help                Print this information and exit."
     echo ""
     exit 1
@@ -82,6 +93,8 @@ fi
 JUP_PORT=${JUP_PORT:-8888}
 # Set name of docker container (default name: multimodal-one-shot)
 DOCKER_NAME=${DOCKER_NAME:-multimodal-one-shot}
+# Set password of notebook (default password: '' - no authentication)
+JUP_PASS=${JUP_PASS:-''}
 
 
 # Print some information on selected options
@@ -89,6 +102,7 @@ echo "Starting experiment notebook container!"
 echo ""
 echo "Jupyter notebook port: ${JUP_PORT}"
 echo "Docker container name: ${DOCKER_NAME}"
+echo "Jupyter notebook access token: ${JUP_PASS}"
 echo ""
 
 
@@ -103,4 +117,4 @@ nvidia-docker run \
     -p ${JUP_PORT}:${JUP_PORT} \
     --name ${DOCKER_NAME} \
     reloff/multimodal-one-shot \
-    jupyter notebook --no-browser --ip=0.0.0.0 --port=${JUP_PORT} --allow-root --notebook-dir='/experiments'
+    jupyter notebook --no-browser --ip=0.0.0.0 --port=${JUP_PORT} --NotebookApp.token=${JUP_PASS} --allow-root --notebook-dir='/experiments'

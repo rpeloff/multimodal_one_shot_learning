@@ -68,6 +68,10 @@ def check_arguments():
                              "(defaults to '{}' in the current working "
                              "directory)".format('data'),
                         default='data')
+    parser.add_argument('--output-dir', 
+                        help="Path to store vision test results "
+                             "(defaults to the model directory)",
+                        default=None)
     parser.add_argument('--params-file', 
                         type=str,
                         help="Filename of model parameters file e.g. '{0}' "
@@ -115,7 +119,16 @@ def check_arguments():
                         help="Number of few-shot test episodes"
                              "(defaults to {})".format(400),
                         default=400)
-    
+    parser.add_argument('--originator-type',
+                        type=str,
+                        help="Speaker selection in test episodes (defaults to "
+                             "'different' where support and query set speakers "
+                             "are different; 'same' tests speaker invariance, "
+                             "with query speakers always in support set either "
+                             "for matching concept (easy) or different concept "
+                             "(distractor))",
+                        choices=['different', 'same'],
+                        default='different')
     return parser.parse_args()
 
 
@@ -131,9 +144,25 @@ def main():
 
     # Get specified model directory (default cwd)
     model_dir = ARGS.model_dir
-
+    test_model_dir = ARGS.output_dir
+    if test_model_dir is None:
+        test_model_dir = model_dir
+    else:
+        test_model_dir = os.path.abspath(test_model_dir)
+    
+    # Check if not using a previous run, and create a unique run directory
+    if not os.path.exists(os.path.join(test_model_dir, LOG_FILENAME)):
+        unique_dir = "{}_{}".format(
+            'speech_test', 
+            datetime.datetime.now().strftime("%y%m%d_%Hh%Mm%Ss_%f"))
+        test_model_dir = os.path.join(test_model_dir, unique_dir)
+    
+    # Create directories
+    if not os.path.exists(test_model_dir):
+        os.makedirs(test_model_dir)
+    
     # Set logging to print to console and log to file
-    utils.set_logger(model_dir, log_fn=LOG_FILENAME)
+    utils.set_logger(test_model_dir, log_fn=LOG_FILENAME)
     logging.info("Using model directory: {}".format(model_dir))
 
     # Load JSON model params from specified file or a previous run if available
@@ -174,7 +203,7 @@ def main():
     for arg in var_args:
         test_options[arg] = getattr(ARGS, arg)
     logging.info("Testing parameters: {}".format(test_options))
-    test_options_path = os.path.join(model_dir, 'test_options.json')
+    test_options_path = os.path.join(test_model_dir, 'test_options.json')
     with open(test_options_path, 'w') as fp:
         logging.info("Writing most recent testing parameters to file: {}"
                         "".format(test_options_path))
@@ -247,6 +276,7 @@ def main():
                                          x_query_data=x_test_split[1],
                                          y_query_labels=y_test_split[1],
                                          z_query_originators=z_test_split[1],
+                                         originator_type=ARGS.originator_type,
                                          k_shot=ARGS.k_shot,
                                          l_way=ARGS.l_way,
                                          n_queries=ARGS.n_queries,
@@ -299,9 +329,11 @@ def main():
                         test_dtw=test_dtw,
                         dtw_cost_func=dtw_cost_func,
                         dtw_post_process=dtw_post_process,
+                        test_invariance=(ARGS.originator_type == 'same'),
                         # Other params:
                         log_interval=int(ARGS.n_test_episodes/10),
                         model_dir=model_dir,
+                        output_dir=test_model_dir,
                         summary_dir='summaries/test',
                         restore_checkpoint=ARGS.restore_checkpoint)
 
@@ -319,8 +351,10 @@ def test_few_shot_model(
         test_dtw=False,
         dtw_cost_func=None,
         dtw_post_process=None,
+        test_invariance=False,
         log_interval=1,
         model_dir='saved_models',
+        output_dir='.',
         summary_dir='summaries/test',
         restore_checkpoint=None):
     # Get the global step tensor and set intial step value
@@ -364,7 +398,7 @@ def test_few_shot_model(
 
         # Create session summary writer
         summary_writer = tf.summary.FileWriter(os.path.join(
-            model_dir, summary_dir,
+            output_dir, summary_dir,
             datetime.datetime.now().strftime("%Hh%Mm%Ss_%f")), sess.graph)
         # Get tf.summary tensor to evaluate for few-shot accuracy
         test_acc_input = tf.placeholder(TF_FLOAT)
@@ -386,7 +420,7 @@ def test_few_shot_model(
             else:
                 image = np.squeeze(image, axis=-1)
             utils.save_image(image, filename=os.path.join(
-                model_dir, 'test_images', '{}_{}_{}_{}_{}_{}.pdf'.format(
+                output_dir, 'test_images', '{}_{}_{}_{}_{}_{}.pdf'.format(
                     'support', index, 'label', label.decode("utf-8"), 'speaker',
                     speaker.decode("utf-8"))), cmap='inferno')
         for index, (image, label, speaker) in enumerate(zip(*query_batch)):
@@ -395,15 +429,21 @@ def test_few_shot_model(
             else:
                 image = np.squeeze(image, axis=-1)
             utils.save_image(image, filename=os.path.join(
-                model_dir, 'test_images', '{}_{}_{}_{}_{}_{}.pdf'.format(
+                output_dir, 'test_images', '{}_{}_{}_{}_{}_{}.pdf'.format(
                     'query', index, 'label', label.decode("utf-8"), 'speaker',
                     speaker.decode("utf-8"))), cmap='inferno')
 
         # ----------------------------------------------------------------------
         # Few-shot testing:
         # ----------------------------------------------------------------------
+        # Few-shot accuracy counters
         total_queries = 0
         total_correct = 0
+        # Speaker invariance accuracy counters
+        total_easy_queries = 0
+        total_easy_correct = 0
+        total_distractor_queries = 0
+        total_distractor_correct = 0
         sess.run(test_iterator.initializer, feed_dict=test_feed_dict)
         for episode in range(n_episodes):
             support_batch, query_batch = sess.run([support_set, query_set])
@@ -429,11 +469,42 @@ def test_few_shot_model(
             predicted_labels = support_batch[1][nearest_neighbour_indices] 
             total_correct += np.sum(query_batch[1] == predicted_labels)
             total_queries += query_batch[1].shape[0]
+            if test_invariance:
+                # Count queries and predictions with easy/distractor speakers
+                for q_index in range(query_batch[1].shape[0]):
+                    n_same_speaker = np.sum(
+                        np.logical_and(query_batch[1][q_index] == support_batch[1],
+                                       query_batch[2][q_index] == support_batch[2]))
+                    if n_same_speaker > 0:  # easy speakers
+                        total_easy_queries += 1
+                        if query_batch[1][q_index] == predicted_labels[q_index]:
+                            total_easy_correct += 1
+                    else:  # distractor speakers
+                        total_distractor_queries += 1
+                        if query_batch[1][q_index] == predicted_labels[q_index]:
+                            total_distractor_correct += 1
+                # prediction_originators = support_batch[2][nearest_neighbour_indices]
+                # total_easy_correct += np.sum(
+                #     np.logical_and(query_batch[1] == predicted_labels,
+                #                    query_batch[2] == prediction_originators))
+                # total_easy_queries += np.sum(query_batch[2] == prediction_originators)
+                # total_distractor_correct += np.sum(
+                #     np.logical_and(query_batch[1] == predicted_labels,
+                #                    query_batch[2] != prediction_originators))
+                # total_distractor_queries += np.sum(query_batch[2] != prediction_originators)
             if episode % log_interval == 0:
                 avg_acc = total_correct/total_queries
                 ep_message = ("\tFew-shot Test: [Episode: {}/{}]\t"
                                 "Average accuracy: {:.7f}".format(
                                     episode, n_episodes, avg_acc))
+                if test_invariance:
+                    avg_easy_acc = total_easy_correct/total_easy_queries if total_easy_queries != 0 else 0.
+                    avg_dist_acc = total_distractor_correct/total_distractor_queries if total_distractor_queries != 0 else 0.
+                    ep_message += ("\n\t\tEasy speaker accuracy: {:.7f}\tDistractor "
+                                   "speaker accuracy: {:.7f}".format(
+                                       avg_easy_acc, avg_dist_acc))
+                    ep_message += ("\n\t\tNum easy speakers: {}\tNum distractor speakers: {}"
+                                   .format(total_easy_queries, total_distractor_queries))
                 logging.info(ep_message)
         # ----------------------------------------------------------------------
         # Print stats:
@@ -441,12 +512,20 @@ def test_few_shot_model(
         avg_acc = total_correct/total_queries
         few_shot_message = ("Test set (few-shot): Average accuracy: "
                             "{:.5f}".format(avg_acc))
+        if test_invariance:
+            avg_easy_acc = total_easy_correct/total_easy_queries
+            avg_dist_acc = total_distractor_correct/total_distractor_queries
+            few_shot_message += ("\n\t\tEasy speaker accuracy: {:.5f}\tDistractor "
+                                 "speaker accuracy: {:.5f}".format(
+                                     avg_easy_acc, avg_dist_acc))
+            few_shot_message += ("\n\t\tNum easy speakers: {}\tNum distractor speakers: {}"
+                                 .format(total_easy_queries, total_distractor_queries))
         logging.info(few_shot_message)
         test_summ_val = sess.run(test_summ, feed_dict={test_acc_input: avg_acc})
         summary_writer.add_summary(test_summ_val, step)
         summary_writer.flush()
-        with open(os.path.join(model_dir, 'test_result.txt'), 'w') as res_file:
-            res_file.write("Test accuracy: {:.5f}".format(avg_acc))
+        with open(os.path.join(output_dir, 'test_result.txt'), 'w') as res_file:
+            res_file.write(few_shot_message)
     # Testing complete
     logging.info("Testing complete.")
 

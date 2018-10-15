@@ -61,6 +61,10 @@ def check_arguments():
                              "(defaults to '{}' in the current working "
                              "directory)".format('data'),
                         default='data')
+    parser.add_argument('--output-dir', 
+                        help="Path to store vision test results "
+                             "(defaults to the model directory)",
+                        default=None)
     parser.add_argument('--params-file', 
                         type=str,
                         help="Filename of model parameters file e.g. '{0}' "
@@ -122,11 +126,27 @@ def main():
     np.random.seed(ARGS.random_seed)
     tf.set_random_seed(ARGS.random_seed)
 
-    # Get specified model directory (default cwd)
+    # Get specified model and directories (default cwd)
     model_dir = ARGS.model_dir
-
+    test_model_dir = ARGS.output_dir
+    if test_model_dir is None:
+        test_model_dir = model_dir
+    else:
+        test_model_dir = os.path.abspath(test_model_dir)
+    
+    # Check if not using a previous run, and create a unique run directory
+    if not os.path.exists(os.path.join(test_model_dir, LOG_FILENAME)):
+        unique_dir = "{}_{}".format(
+            'vision_test', 
+            datetime.datetime.now().strftime("%y%m%d_%Hh%Mm%Ss_%f"))
+        test_model_dir = os.path.join(test_model_dir, unique_dir)
+    
+    # Create directories
+    if not os.path.exists(test_model_dir):
+        os.makedirs(test_model_dir)
+    
     # Set logging to print to console and log to file
-    utils.set_logger(model_dir, log_fn=LOG_FILENAME)
+    utils.set_logger(test_model_dir, log_fn=LOG_FILENAME)
     logging.info("Using model directory: {}".format(model_dir))
 
     # Load JSON model params from specified file or a previous run if available
@@ -167,7 +187,7 @@ def main():
     for arg in var_args:
         test_options[arg] = getattr(ARGS, arg)
     logging.info("Testing parameters: {}".format(test_options))
-    test_options_path = os.path.join(model_dir, 'test_options.json')
+    test_options_path = os.path.join(test_model_dir, 'test_options.json')
     with open(test_options_path, 'w') as fp:
         logging.info("Writing most recent testing parameters to file: {}"
                         "".format(test_options_path))
@@ -270,6 +290,7 @@ def main():
                         # Other params:
                         log_interval=int(ARGS.n_test_episodes/10),
                         model_dir=model_dir,
+                        output_dir=test_model_dir,
                         summary_dir='summaries/test',
                         restore_checkpoint=ARGS.restore_checkpoint)
 
@@ -287,6 +308,7 @@ def test_few_shot_model(
         test_pixels=False,
         log_interval=1,
         model_dir='saved_models',
+        output_dir='.',
         summary_dir='summaries/test',
         restore_checkpoint=None):
    # Get the global step tensor and set intial step value
@@ -330,7 +352,7 @@ def test_few_shot_model(
         
         # Create session summary writer
         summary_writer = tf.summary.FileWriter(os.path.join(
-            model_dir, summary_dir,
+            output_dir, summary_dir,
             datetime.datetime.now().strftime("%Hh%Mm%Ss_%f")), sess.graph)
         # Get tf.summary tensor to evaluate for few-shot accuracy
         test_acc_input = tf.placeholder(TF_FLOAT)
@@ -348,12 +370,12 @@ def test_few_shot_model(
         # Save figures to pdf for later use ...
         for index, (image, label) in enumerate(zip(*support_batch)):
             utils.save_image(np.squeeze(image, axis=-1), filename=os.path.join(
-                model_dir, 'test_images', '{}_{}_{}_{}.pdf'.format(
+                output_dir, 'test_images', '{}_{}_{}_{}.pdf'.format(
                     'support', index, 'label', label.decode("utf-8"))),
                     cmap='gray_r')
         for index, (image, label) in enumerate(zip(*query_batch)):
             utils.save_image(np.squeeze(image, axis=-1), filename=os.path.join(
-                model_dir, 'test_images', '{}_{}_{}_{}.pdf'.format(
+                output_dir, 'test_images', '{}_{}_{}_{}.pdf'.format(
                     'query', index, 'label', label.decode("utf-8"))),
                     cmap='gray_r')
 
@@ -393,8 +415,8 @@ def test_few_shot_model(
         test_summ = sess.run(test_summ, feed_dict={test_acc_input: avg_acc})
         summary_writer.add_summary(test_summ, step)
         summary_writer.flush()
-        with open(os.path.join(model_dir, 'test_result.txt'), 'w') as res_file:
-            res_file.write("Test accuracy: {:.5f}".format(avg_acc))
+        with open(os.path.join(vision, 'test_result.txt'), 'w') as res_file:
+            res_file.write(few_shot_message)
     # Testing complete
     logging.info("Testing complete.")
 

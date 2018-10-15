@@ -93,8 +93,8 @@ def load_omniglot(path='data/omniglot.npz'):
     omniglot = ()
     if os.path.isfile(path):
         np_data = np.load(path)
-        omniglot += ((np_data['x_train'], np_data['y_train'], np_data['z_train']), )
-        omniglot += ((np_data['x_test'], np_data['y_test'], np_data['z_test']), )
+        omniglot += ((np.ascontiguousarray(np_data['x_train']), np_data['y_train'], np_data['z_train']), )
+        omniglot += ((np.ascontiguousarray(np_data['x_test']), np_data['y_test'], np_data['z_test']), )
     else:
         print("Downloading Omniglot datasets ...")
         files = ['images_background.zip', 'images_evaluation.zip']
@@ -137,7 +137,7 @@ def load_omniglot(path='data/omniglot.npz'):
                         z_alphabets.append(alphabet)
             os.remove(filename)  # Delete temporary archive files ... 
             omniglot += ((
-                np.asarray(x_data, dtype=_globals.NP_INT),
+                np.ascontiguousarray(x_data, dtype=_globals.NP_INT),
                 np.asarray(y_labels),
                 np.asarray(z_alphabets)), )
         # Save downloaded and extracted data in numpy archive for later use

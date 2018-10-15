@@ -232,6 +232,12 @@ def check_arguments():
                              "concept in a balanced batch (defaults to {})"
                              "".format(4),
                         default=4)
+    parser.add_argument('--max-offline-pairs',
+                       type=int,
+                       help="Maximum number of same pairs that will be sampled "
+                            "for siamese triplet (offline) model (defaults to "
+                            "100000).",
+                       default=int(100e3))
 
     # --------------------------------------------------------------------------
     # Training parameters:
@@ -283,7 +289,7 @@ def main():
     logging.info("Training speech model: version={}".format(ARGS.model_version))
     logging.info("Using model directory: {}".format(model_dir))
 
-     # Save base parameters and exit if `--save-base-params` flag encountered
+    # Save base parameters and exit if `--save-base-params` flag encountered
     if ARGS.save_base_params:
         base_params = speech.MODEL_BASE_PARAMS[ARGS.model_version].copy()
         base_params['model_version'] = ARGS.model_version
@@ -433,7 +439,8 @@ def main():
         # Triplet sampling from data pipeline for offline siamese models
         if (ARGS.model_version == 'siamese_triplet'):  
             train_pipeline = data.sample_dataset_triplets(train_pipeline,
-                                                          use_dummy_data=True)
+                                                          use_dummy_data=True,
+                                                          n_max_same_pairs=ARGS.max_offline_pairs)
         train_pipeline = train_pipeline.prefetch(1)  # prefetch 1 batch per step
 
         # --------------------------------------------
