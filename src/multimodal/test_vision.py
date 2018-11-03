@@ -415,7 +415,7 @@ def test_few_shot_model(
         test_summ = sess.run(test_summ, feed_dict={test_acc_input: avg_acc})
         summary_writer.add_summary(test_summ, step)
         summary_writer.flush()
-        with open(os.path.join(vision, 'test_result.txt'), 'w') as res_file:
+        with open(os.path.join(output_dir, 'test_result.txt'), 'w') as res_file:
             res_file.write(few_shot_message)
     # Testing complete
     logging.info("Testing complete.")

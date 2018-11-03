@@ -1,5 +1,5 @@
 """
-Tools for loading common datasets.
+Tools for loading datasets.
 
 Author: Ryan Eloff
 Contact: ryan.peter.eloff@gmail.com
@@ -159,7 +159,7 @@ def load_flickraudio(
         feats_type='mfcc',
         encoding='latin1',
         remove_labels=None):
-    """Load the Flickr-Audio extracted features."""
+    """TODO(rpeloff) load the Flickr-Audio extracted features."""
     valid_feats = ['mfcc', 'fbank']
     if feats_type not in valid_feats:
         raise ValueError("Invalid value specified for feats_type: {}. Expected "
@@ -203,7 +203,7 @@ def load_tidigits(
         feats_type='mfcc',
         encoding='latin1',
         dev_size=5000):
-    """Load the TIDigits extracted features."""
+    """TODO(rpeloff) load the TIDigits extracted features."""
     valid_feats = ['mfcc', 'fbank']
     if feats_type not in valid_feats:
         raise ValueError("Invalid value specified for feats_type: {}. Expected "
@@ -240,7 +240,7 @@ def preprocess_images(
         resize_method=tf.image.ResizeMethod.BILINEAR,
         expand_dims=False,
         dtype=tf.float32):
-    """Preprocess image data by resizing, normalizing, etc."""
+    """TODO(rpeloff) preprocess image data by resizing, normalizing, etc."""
     images_out = images
     if expand_dims:  # for single channel images without depth dimension
         images_out = tf.expand_dims(images_out, axis=-1)
@@ -254,7 +254,7 @@ def preprocess_images(
 
 
 def pad_sequences(x, n_padded, center_padded=True):
-    """Return the padded sequences and their original lengths."""
+    """TODO(rpeloff) return the padded sequences and their original lengths."""
     padded_x = np.zeros((len(x), n_padded, x[0].shape[1]), dtype=_globals.NP_FLOAT)
     lengths = []
     for i_data, cur_x in enumerate(x):

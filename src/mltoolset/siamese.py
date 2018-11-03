@@ -44,7 +44,7 @@ def siamese_network(
         model_param_dict,
         input_param='x_input',
         var_scope='siamese'):
-    """Build a Siamese network using `model_func` to define the left and right branches."""
+    """Build a Siamese tied network using `model_func` to define the left and right branches."""
     # Copy param dict for the duplicate left and right branches 
     model_l_param_dict = model_param_dict.copy()
     model_r_param_dict = model_param_dict.copy()
@@ -67,7 +67,7 @@ def siamese_triplet_network(
         model_param_dict,
         input_param='x_input',
         var_scope='siamese_triplet'):
-    """Build a Siamese Triplet network using `model_func` to define the triplet branches."""
+    """Build a Siamese Triplet tied network using `model_func` to define the triplet branches."""
     # Copy param dict for the duplicate branches 
     model_a_param_dict = model_param_dict.copy()
     model_s_param_dict = model_param_dict.copy()
@@ -105,9 +105,9 @@ def loss_triplets_cos(
         margin,
         average_non_zero=False,
         epsilon=1e-16):
-    """Calulcate Triplet Loss [1]_ of the Siamese Triplet network.
+    """Calculcate Triplet Loss [1]_ of the Siamese Triplet tied network.
     
-    NOTE: 
+    TODO(rpeloff) NOTE: 
     - Params `x_anchor` and `x_same` are same type, while `x_diff` is different
     - Enable "batch all" non-zero loss averaging with `average_non_zero=True`
     - Param `epsilon` determines which values are zero (i.e. losses < 1e-16 = 0)
@@ -200,12 +200,10 @@ def loss_triplets_cos(
         # Count the number of positive triplets (where triplet_loss > 0)
         valid_triplets = tf.to_float(tf.greater(losses, epsilon))
         num_positive_triplets = tf.reduce_sum(valid_triplets)
-        num_valid_triplets = tf.to_float(tf.shape(losses)[0])
-       
+        num_valid_triplets = tf.to_float(tf.shape(losses)[0])       
         # Get average of non-zero triplet loss terms, and fraction positive
         triplet_loss = tf.reduce_sum(losses) / (num_positive_triplets + epsilon)
         fraction_positive_triplets = num_positive_triplets / (num_valid_triplets + epsilon)
         tf.summary.scalar('frac_positive_triplets', fraction_positive_triplets)
-
         # Return triplet loss with only non-zero loss terms (Sample batches B=P.K !)
         return triplet_loss

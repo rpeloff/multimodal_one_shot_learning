@@ -47,5 +47,4 @@ def get_training_op(
     return training_op
 
 
-
-        
+# TODO(rpeloff) move general functions from train scripts here ...

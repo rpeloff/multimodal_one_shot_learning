@@ -98,6 +98,7 @@ def batch_dataset(
         y_labels,
         batch_size,
         shuffle=True,
+        seed=42,
         drop_remainder=True):
     """Create mini-batch data pipeline that iterates over the full dataset."""
     n_data = tf.shape(x_data, out_type=tf.int64)[0]
@@ -105,7 +106,7 @@ def batch_dataset(
         tf.data.Dataset.from_tensor_slices(x_data),
         tf.data.Dataset.from_tensor_slices(y_labels)))
     if shuffle:
-        batched_dataset = batched_dataset.shuffle(n_data)
+        batched_dataset = batched_dataset.shuffle(n_data, seed=seed)
     if drop_remainder:  # TODO(rpeloff) TF 1.10 this is part of dataset.batch()
         batched_dataset = batched_dataset.apply(
             tf.contrib.data.batch_and_drop_remainder(batch_size))
@@ -118,7 +119,8 @@ def batch_k_examples_for_p_concepts(
         x_data,
         y_labels,
         p_batch,
-        k_batch #, unique_concepts=None
+        k_batch, #, unique_concepts=None
+        seed=42
         ):
     """Create dataset with batches of P concept classes and K examples per class.   
     
@@ -190,7 +192,7 @@ def batch_k_examples_for_p_concepts(
     n_concepts = tf.shape(unique_concepts, out_type=tf.int64)[0]
     # Create shuffled dataset of the unique concept labels
     balanced_dataset = tf.data.Dataset.from_tensor_slices(unique_concepts)
-    balanced_dataset = balanced_dataset.shuffle(n_concepts)
+    balanced_dataset = balanced_dataset.shuffle(n_concepts, seed=seed)
     # Select p_batch labels from the shuffled concepts for one batch/episode
     balanced_dataset = balanced_dataset.take(p_batch) 
     # Map each of the selected concepts to a set of K exemplars
@@ -448,17 +450,22 @@ def batch_few_shot_episodes(
     if episode_label_set is None:
         episode_label_set = create_episode_label_set(y_support_labels,
                                                      y_query_labels,
+                                                     z_difficult_originators=(z_support_originators 
+                                                                              if originator_type == 'difficult' else None),
                                                      l_way=l_way,
                                                      seed=seed)
     # Create support set by sampling K examples for each of the episode labels
     support_set_size = k_shot * l_way
     support_set_temp = episode_label_set.flat_map(
-        lambda label: tf.data.Dataset.from_tensor_slices(
+        lambda label, originator: tf.data.Dataset.from_tensor_slices(
             _sample_k_examples_for_labels(label,
                                           x_support_data,
                                           y_support_labels,
                                           z_originators=z_support_originators,
-                                          # z_type='different'  # one of ['same', 'different', 'random']
+                                          valid_mask=(_get_originator_mask([originator], 
+                                                                           z_support_originators,
+                                                                           originator_type='same')
+                                                      if originator_type == 'difficult' else None),
                                           k_size=k_shot,
                                           seed=seed)))
     support_set_temp = support_set_temp.shuffle(support_set_size, seed=seed)
@@ -478,6 +485,8 @@ def batch_few_shot_episodes(
                         valid_mask=_get_originator_mask(z_originators, 
                                                         z_query_originators,
                                                         originator_type=originator_type),
+                        valid_label_mask=(_get_difficult_label_mask(y_support, z_originators, y_query_labels)
+                                                              if originator_type == 'difficult' else None),
                         k_size=n_queries,
                         balanced=make_matching_set,  # NOTE n_queries should equal l_way for matching set
                         seed=seed))
@@ -501,6 +510,7 @@ def batch_few_shot_episodes(
     return tf.data.Dataset.zip((support_set, query_set))
 
 
+# TODO(rpeloff) remove: function does not work as expected ...
 # def batch_mulitmodal_few_shot_episodes(
 #         x1_support_data,
 #         y1_support_labels,
@@ -619,6 +629,7 @@ def batch_few_shot_episodes(
 
 def create_episode_label_set(
         *y_label_sets,
+        z_difficult_originators=None,
         l_way=5,
         seed=42):
     """Create a dataset pipeline of L unique labels for a few-shot episode."""
@@ -635,8 +646,25 @@ def create_episode_label_set(
     episode_label_set = tf.data.Dataset.from_tensor_slices(valid_labels_set)
     episode_label_set = episode_label_set.shuffle(labels_set_size, seed=seed)
     episode_label_set = episode_label_set.take(l_way)
+    
+    if z_difficult_originators is not None:
+        unique_originators = tf.unique(z_difficult_originators)[0]
+        same_speaker_set = tf.data.Dataset.from_tensor_slices(unique_originators)
+        same_speaker_set_size = tf.cast(tf.shape(unique_originators)[0], tf.int64)
+        same_speaker_set = same_speaker_set.shuffle(same_speaker_set_size, seed=seed)
+        
+        cross_speaker_set = same_speaker_set.take(1).map(
+            lambda speaker: tf.gather(z_difficult_originators, tf.random_shuffle(
+                tf.where(tf.not_equal(speaker, z_difficult_originators))[0]))[0])
+        same_speaker_set = same_speaker_set.take(1).flat_map(
+            lambda speaker: tf.data.Dataset.from_tensor_slices(tf.fill([l_way - 1], speaker)))
+        episode_originator_set = same_speaker_set.concatenate(cross_speaker_set)
+    else:
+#         episode_originator_set = tf.fill([l_way], None)
+        episode_originator_set = tf.data.Dataset.from_tensor_slices(tf.fill([l_way], -1))
+    episode_originator_set = episode_originator_set.take(l_way)
+    episode_label_set = tf.data.Dataset.zip((episode_label_set, episode_originator_set))
     return episode_label_set
-
 
 
 def _sample_k_examples_for_labels(
@@ -645,15 +673,24 @@ def _sample_k_examples_for_labels(
         y_labels,
         z_originators=None,
         valid_mask=None,
+        valid_label_mask=None,
         k_size=1,
         balanced=False,
         seed=42):
     """Sample k examples from the data within the specified label subset."""
     label_subset_mask = tf.equal(tf.expand_dims(y_labels, -1), labels)
     if valid_mask is not None:
-        label_subset_mask = tf.cast(tf.reduce_sum(tf.cast(
+        orig_label_subset_mask = tf.cast(tf.reduce_sum(tf.cast(
             label_subset_mask, tf.int32), axis=-1), tf.bool)
-        label_subset_mask = tf.logical_and(label_subset_mask, valid_mask)
+        orig_label_subset_mask = tf.logical_and(orig_label_subset_mask, valid_mask)
+    if valid_label_mask is not None:
+        diff_label_subset_mask = tf.cast(tf.reduce_sum(tf.cast(
+            label_subset_mask, tf.int32), axis=-1), tf.bool)
+        diff_label_subset_mask = tf.logical_and(diff_label_subset_mask, valid_label_mask)
+        label_subset_mask = tf.logical_and(diff_label_subset_mask, orig_label_subset_mask)
+    if valid_label_mask is None and valid_mask is not None:
+        label_subset_mask = orig_label_subset_mask
+    #   
     label_subset_indices = tf.where(label_subset_mask)[:, 0]
     
     y_label_subset = tf.gather(y_labels, label_subset_indices)
@@ -744,7 +781,7 @@ def _get_originator_mask(
         originator_type='different'):
     """Get a boolean mask over query dataset to select instances where originators are valid.
     
-    originator_type one of ['different', 'same']:
+    TODO(rpeloff) originator_type one of ['different', 'same', 'difficult']:
     - 'different': Query and support set originators are always different
     - 'same': Query originator always appears in support set (not necessarily for matching concept)
     """
@@ -755,4 +792,22 @@ def _get_originator_mask(
         valid_mask = tf.equal(valid_mask, False)
     elif originator_type == 'same':
         valid_mask = tf.equal(valid_mask, True)
+    elif originator_type == 'difficult':
+        unique_originator, _, counts = tf.unique_with_counts(z_support_set)
+        most_frequent = tf.gather(unique_originator, tf.nn.top_k(counts)[1])
+        valid_mask = tf.equal(
+            tf.expand_dims(z_query_originators, -1), most_frequent)
+        valid_mask = tf.reduce_sum(tf.cast(valid_mask, tf.int32), axis=-1)
+        valid_mask = tf.equal(valid_mask, True)
+    return valid_mask
+
+
+def _get_difficult_label_mask(y_support_set, z_support_set, y_query_labels):
+    unique_originator, indices, counts = tf.unique_with_counts(z_support_set)
+    least_frequent_index = tf.nn.top_k(counts*tf.constant(-1))[1]
+    diffcult_label = tf.gather(y_support_set, tf.where(tf.equal(indices, least_frequent_index))[0])
+    valid_mask = tf.equal(
+        tf.expand_dims(y_query_labels, -1), diffcult_label)
+    valid_mask = tf.reduce_sum(tf.cast(valid_mask, tf.int32), axis=-1)
+    valid_mask = tf.equal(valid_mask, True)
     return valid_mask

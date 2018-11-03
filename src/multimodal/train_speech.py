@@ -421,20 +421,27 @@ def main():
         train_encoder = preprocessing.LabelEncoder()  # encode labels to indices
         y_train = train_encoder.fit_transform(y_train)
         model_params['n_output_logits'] = np.unique(y_train).shape[0]
+        # Shuffle data
+        x_train_preprocess = tf.random_shuffle(x_train_placeholder,
+                                               seed=ARGS.random_seed)
+        y_train_preprocess = tf.random_shuffle(y_train_placeholder,
+                                                seed=ARGS.random_seed)
         # Add single depth channel to feature image so it is a 'grayscale image'
-        x_train_with_depth = tf.expand_dims(x_train_placeholder, axis=-1)
+        x_train_with_depth = tf.expand_dims(x_train_preprocess, axis=-1)
          # Use balanced batching pipeline if specified, else batch full dataset
         if ARGS.balanced_batching:
             train_pipeline = (
                 data.batch_k_examples_for_p_concepts(x_data=x_train_with_depth,
-                                                     y_labels=y_train_placeholder,
+                                                     y_labels=y_train_preprocess,
                                                      p_batch=ARGS.p_batch,
-                                                     k_batch=ARGS.k_batch))
+                                                     k_batch=ARGS.k_batch,
+                                                     seed=ARGS.random_seed))
         else:
             train_pipeline = data.batch_dataset(x_data=x_train_with_depth,
-                                                y_labels=y_train_placeholder,
+                                                y_labels=y_train_preprocess,
                                                 batch_size=ARGS.batch_size,
                                                 shuffle=True,
+                                                seed=ARGS.random_seed,
                                                 drop_remainder=True)
         # Triplet sampling from data pipeline for offline siamese models
         if (ARGS.model_version == 'siamese_triplet'):  

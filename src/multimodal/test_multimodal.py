@@ -148,6 +148,16 @@ def check_arguments():
                         help="Number of few-shot test episodes"
                              "(defaults to {})".format(400),
                         default=400)
+    parser.add_argument('--originator-type',
+                        type=str,
+                        help="Speaker selection in test episodes (defaults to "
+                             "'different' where support and query set speakers "
+                             "are different; 'same' tests speaker invariance, "
+                             "with query speakers always in support set either "
+                             "for matching concept (easy) or different concept "
+                             "(distractor))",
+                        choices=['different', 'same', 'difficult'],
+                        default='different')
     
     return parser.parse_args()
 
@@ -318,6 +328,9 @@ def main():
                                                           y_speech_test_split[1],
                                                           y_vision_test_split[0],
                                                           y_vision_test_split[1],
+                                                          z_difficult_originators=
+                                                              (z_speech_test_split[0] 
+                                                               if ARGS.originator_type == 'difficult' else None),
                                                           l_way=ARGS.l_way,
                                                           seed=ARGS.random_seed)
         # Batch episodes of support/query/matching sets for few-shot speech test
@@ -330,6 +343,7 @@ def main():
                                          z_query_originators=z_speech_test_split[1],
                                          episode_label_set=episode_label_set,
                                          make_matching_set=speech_matching_set,
+                                         originator_type=ARGS.originator_type,
                                          k_shot=ARGS.k_shot,
                                          l_way=ARGS.l_way,
                                          n_queries=speech_queries,
@@ -397,37 +411,38 @@ def main():
         test_pixels = True
     # Test the multimodal few-shot model
     test_mulitmodal_few_shot_model(
-        test_feed_dict=test_feed_dict,
-        # Speech test params ...
-        speech_graph=speech_graph,
-        speech_train_flag=speech_train_flag,
-        speech_test_iterator=speech_test_iterator,
-        speech_model_embedding=speech_model_embedding,                
-        speech_embed_input=speech_embed_input,
-        # Vision test params ...
-        vision_graph=vision_graph,
-        vision_train_flag=vision_train_flag,
-        vision_test_iterator=vision_test_iterator,
-        vision_model_embedding=vision_model_embedding,
-        vision_embed_input=vision_embed_input,
-        # Nearest neigbour params ...
-        query_input=query_input,
-        support_memory_input=support_memory_input,
-        nearest_neighbour=model_nn_memory,
-        n_episodes=ARGS.n_test_episodes,
-        query_type=ARGS.query_type,
-        test_pixels=test_pixels,
-        test_dtw=test_dtw,
-        dtw_cost_func=dtw_cost_func,
-        dtw_post_process=dtw_post_process,
-        # Other params ...
-        log_interval=int(ARGS.n_test_episodes/10),
-        model_dir=test_model_dir,
-        speech_model_dir=speech_model_dir,
-        vision_model_dir=vision_model_dir,
-        summary_dir='summaries/test',
-        speech_restore_checkpoint=ARGS.speech_restore_checkpoint,
-        vision_restore_checkpoint=ARGS.vision_restore_checkpoint)
+                                test_feed_dict=test_feed_dict,
+                                # Speech test params ...
+                                speech_graph=speech_graph,
+                                speech_train_flag=speech_train_flag,
+                                speech_test_iterator=speech_test_iterator,
+                                speech_model_embedding=speech_model_embedding,                
+                                speech_embed_input=speech_embed_input,
+                                # Vision test params ...
+                                vision_graph=vision_graph,
+                                vision_train_flag=vision_train_flag,
+                                vision_test_iterator=vision_test_iterator,
+                                vision_model_embedding=vision_model_embedding,
+                                vision_embed_input=vision_embed_input,
+                                # Nearest neigbour params ...
+                                query_input=query_input,
+                                support_memory_input=support_memory_input,
+                                nearest_neighbour=model_nn_memory,
+                                n_episodes=ARGS.n_test_episodes,
+                                query_type=ARGS.query_type,
+                                test_pixels=test_pixels,
+                                test_dtw=test_dtw,
+                                dtw_cost_func=dtw_cost_func,
+                                dtw_post_process=dtw_post_process,
+                                test_invariance=(ARGS.originator_type == 'same' or ARGS.originator_type == 'difficult'),
+                                # Other params ...
+                                log_interval=int(ARGS.n_test_episodes/10),
+                                model_dir=test_model_dir,
+                                speech_model_dir=speech_model_dir,
+                                vision_model_dir=vision_model_dir,
+                                summary_dir='summaries/test',
+                                speech_restore_checkpoint=ARGS.speech_restore_checkpoint,
+                                vision_restore_checkpoint=ARGS.vision_restore_checkpoint)
 
 
 def test_mulitmodal_few_shot_model(
@@ -454,6 +469,7 @@ def test_mulitmodal_few_shot_model(
         test_dtw=False,
         dtw_cost_func=None,
         dtw_post_process=None,
+        test_invariance=False,
         # Other params ...
         log_interval=1,
         model_dir='saved_models',
@@ -616,6 +632,11 @@ def test_mulitmodal_few_shot_model(
     # --------------------------------------------------------------------------
     total_queries = 0
     total_correct = 0
+    # Speaker invariance accuracy counters
+    total_easy_queries = 0
+    total_easy_correct = 0
+    total_distractor_queries = 0
+    total_distractor_correct = 0
     general_session.run([speech_test_iterator.initializer,
                          vision_test_iterator.initializer], 
                         feed_dict=test_feed_dict)  # init test set iterator
@@ -688,14 +709,38 @@ def test_mulitmodal_few_shot_model(
             pred_message += "\n\t\tUpdated vision match labels ('o'=='z'):\t{}".format(
                 predicted_labels_update)
             # Update accuracy counters and log info
-            total_correct += np.sum(actual_labels == predicted_labels)
+            total_correct += np.sum(actual_labels_update == predicted_labels_update)
             total_queries += speech_batch[1][1].shape[0]
+            if test_invariance:
+                # Count queries and predictions with easy/distractor speakers
+                for q_index in range(speech_batch[1][1].shape[0]):
+                    n_same_speaker = np.sum(
+                        np.logical_and(speech_batch[1][1][q_index] == speech_batch[0][1],
+                                       speech_batch[1][2][q_index] == speech_batch[0][2]))
+                    if n_same_speaker > 0:  # easy speakers
+                        total_easy_queries += 1
+                        if actual_labels_update[q_index] == predicted_labels_update[q_index]:
+                            total_easy_correct += 1
+                    else:  # distractor speakers
+                        total_distractor_queries += 1
+                        if actual_labels_update[q_index] == predicted_labels_update[q_index]:
+                            total_distractor_correct += 1
             if episode % log_interval == 0:
                 avg_acc = total_correct/total_queries
                 ep_message = ("\tFew-shot Test: [Episode: {}/{}]\t"
                                 "Average accuracy: {:.7f}".format(
                                     episode, n_episodes, avg_acc))
+                if test_invariance:
+                    avg_easy_acc = total_easy_correct/total_easy_queries if total_easy_queries != 0 else 0.
+                    avg_dist_acc = total_distractor_correct/total_distractor_queries if total_distractor_queries != 0 else 0.
+                    ep_message += ("\n\t\tEasy speaker accuracy: {:.7f}\tDistractor "
+                                   "speaker accuracy: {:.7f}".format(
+                                       avg_easy_acc, avg_dist_acc))
+                    ep_message += ("\n\t\tNum easy speakers: {}\tNum distractor speakers: {}"
+                                   .format(total_easy_queries, total_distractor_queries))
                 logging.info(ep_message)
+#                 print("Speech support labels:", speech_batch[0][1])
+#                 print("Vision support labels:", vision_batch[0][1])
                 logging.info(pred_message)
         # Image query cross-modal matching to speech
         else:
@@ -740,7 +785,7 @@ def test_mulitmodal_few_shot_model(
             pred_message += '\n\t\tUpdated speech prediction labels:\t{}'.format(
                 predicted_labels_update)
             # Update accuracy counters and log info
-            total_correct += np.sum(vision_batch[1][1] == predicted_labels)
+            total_correct += np.sum(actual_labels_update == predicted_labels_update)
             total_queries += vision_batch[1][1].shape[0]
             if episode % log_interval == 0:
                 avg_acc = total_correct/total_queries
@@ -756,13 +801,21 @@ def test_mulitmodal_few_shot_model(
     avg_acc = total_correct/total_queries
     few_shot_message = ("Test set (few-shot): Average accuracy: "
                         "{:.5f}".format(avg_acc))
+    if test_invariance:
+        avg_easy_acc = total_easy_correct/total_easy_queries
+        avg_dist_acc = total_distractor_correct/total_distractor_queries
+        few_shot_message += ("\n\t\tEasy speaker accuracy: {:.5f}\tDistractor "
+                             "speaker accuracy: {:.5f}".format(
+                                 avg_easy_acc, avg_dist_acc))
+        few_shot_message += ("\n\t\tNum easy speakers: {}\tNum distractor speakers: {}"
+                             .format(total_easy_queries, total_distractor_queries))
     logging.info(few_shot_message)
     test_summ = general_session.run(test_summ, 
         feed_dict={test_acc_input: avg_acc})
     summary_writer.add_summary(test_summ, 0)
     summary_writer.flush()
     with open(os.path.join(model_dir, 'test_result.txt'), 'w') as res_file:
-        res_file.write("Test accuracy: {:.5f}".format(avg_acc))
+        res_file.write(few_shot_message)
     # Testing complete
     logging.info("Testing complete.")
     

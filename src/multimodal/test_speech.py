@@ -127,7 +127,7 @@ def check_arguments():
                              "with query speakers always in support set either "
                              "for matching concept (easy) or different concept "
                              "(distractor))",
-                        choices=['different', 'same'],
+                        choices=['different', 'same', 'difficult'],
                         default='different')
     return parser.parse_args()
 
@@ -329,7 +329,7 @@ def main():
                         test_dtw=test_dtw,
                         dtw_cost_func=dtw_cost_func,
                         dtw_post_process=dtw_post_process,
-                        test_invariance=(ARGS.originator_type == 'same'),
+                        test_invariance=(ARGS.originator_type == 'same' or ARGS.originator_type == 'difficult'),
                         # Other params:
                         log_interval=int(ARGS.n_test_episodes/10),
                         model_dir=model_dir,
@@ -476,6 +476,10 @@ def test_few_shot_model(
                         np.logical_and(query_batch[1][q_index] == support_batch[1],
                                        query_batch[2][q_index] == support_batch[2]))
                     if n_same_speaker > 0:  # easy speakers
+#                         print("Support set labels:", support_batch[1])
+#                         print("Support set speaker:", support_batch[2])
+#                         print("Query set labels:", query_batch[1])
+#                         print("Query set speaker:", query_batch[2])
                         total_easy_queries += 1
                         if query_batch[1][q_index] == predicted_labels[q_index]:
                             total_easy_correct += 1

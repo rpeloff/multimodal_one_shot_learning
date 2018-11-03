@@ -29,13 +29,14 @@ import tensorflow as tf
 
 def fast_knn_cos(q_batch, m_keys, k_nn=1, normalize=True):
     """Fast kNN implementation based on cosine similarity.
-
-    NOTE:
-    - Set `normalize=False` only if `q_batch` and `m_keys` are already normalized.
+    
+    Computes indices of the k nearest neighbour memory keys to each query in a
+    batch of queries.
+    
+    Only set `normalize=False` if `q_batch` and `m_keys` are already normalized.
 
     Notes
     -----
-
     Implementation of the exact mode efficient nearest neighbor computation
     described by [1]_.
 

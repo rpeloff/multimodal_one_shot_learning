@@ -389,20 +389,49 @@ def main():
         y_train = train_encoder.fit_transform(y_train)
         model_params['n_output_logits'] = np.unique(y_train).shape[0]
         # y_train = tf.cast(y_train, TF_INT)
+        # Shuffle data
+        x_train_preprocess = tf.random_shuffle(x_train_preprocess,
+                                               seed=ARGS.random_seed)
+        y_train_preprocess = tf.random_shuffle(y_train_placeholder,
+                                                seed=ARGS.random_seed)
         # Use balanced batching pipeline if specified, else batch full dataset
         if ARGS.balanced_batching:
             train_pipeline = (
                 data.batch_k_examples_for_p_concepts(x_data=x_train_preprocess,
-                                                     y_labels=y_train_placeholder,
+                                                     y_labels=y_train_preprocess,
                                                      p_batch=ARGS.p_batch,
-                                                     k_batch=ARGS.k_batch))
+                                                     k_batch=ARGS.k_batch,
+                                                     seed=ARGS.random_seed))
+#         elif ARGS.model_version == 'siamese_triplet':
+#             train_triplets = data.sample_triplets(x_data=x_train_preprocess,
+#                                                   y_labels=y_train_preprocess,
+#                                                   use_dummy_data=True,
+#                                                   n_max_same_pairs=ARGS.max_offline_pairs)
+#             x_triplet_data = tf.data.Dataset.zip((
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[0][0]).batch(ARGS.batch_size, drop_remainder=True),
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[0][1]).batch(ARGS.batch_size, drop_remainder=True),
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[0][1]).batch(ARGS.batch_size, drop_remainder=True)))
+#             y_triplet_data = tf.data.Dataset.zip((
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[1][0]).batch(ARGS.batch_size, drop_remainder=True),
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[1][1]).batch(ARGS.batch_size, drop_remainder=True),
+#                 tf.data.Dataset.from_tensor_slices(train_triplets[1][1]).batch(ARGS.batch_size, drop_remainder=True)))
+#             train_pipeline = tf.data.Dataset.zip((x_triplet_data, y_triplet_data))
+#             n_train_batches = 1000  # not sure of batch size, loop until out of range ...
+#             # Quick hack for num triplet batches in offline siamese ...
+# #             with tf.Session() as sess:
+# #                 n_triplets = sess.run(tf.shape(train_triplets[0])[1], feed_dict={
+# #                     x_train_placeholder: x_train, y_train_placeholder: y_train})
+# #                 n_train_batches = int(n_triplets/ARGS.batch_size)
+# #                 logging.info("Calculated triplet batches: {} batches for batch size {} (total triplets: {})"
+# #                              .format(n_train_batches, ARGS.batch_size, n_triplets))
         else:
             train_pipeline = data.batch_dataset(x_data=x_train_preprocess,
-                                                y_labels=y_train_placeholder,
+                                                y_labels=y_train_preprocess,
                                                 batch_size=ARGS.batch_size,
                                                 shuffle=True,
+                                                seed=ARGS.random_seed,
                                                 drop_remainder=True)
-        # Triplet sampling from data pipeline for siamese models
+        # Triplet sampling from data pipeline for offline siamese models
         if (ARGS.model_version == 'siamese_triplet'):  
             train_pipeline = data.sample_dataset_triplets(train_pipeline,
                                                           use_dummy_data=True,
@@ -649,7 +678,12 @@ def train_few_shot_model(
             sess.run(train_iterator.initializer, feed_dict=train_feed_dict)  # init train dataset iterator
             avg_loss = 0.
             n_batches_completed = 0
-            for i in range(max_batches):
+            
+            if max_batches is None:
+                max_iterator = zero_to_infinity_generator
+            else:
+                max_iterator = range(max_batches)
+            for i in max_iterator:
                 try:
                     # TODO(reploff) Add embeddings and labels to visualize how 
                     # embeddings change over training?
@@ -733,7 +767,13 @@ def train_few_shot_model(
         logging.info("Training complete. Best model found at epoch {} with "
                      "validation accuracy {:.5f}.".format(best_epoch+1, best_val_acc))
 
-
+        
+def zero_to_infinity_generator():
+    i = 0
+    while True:
+        yield i
+        i += 1
+        
 if __name__ == '__main__':
     # Call the script main function
     main()

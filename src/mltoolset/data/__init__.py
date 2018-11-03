@@ -1,12 +1,14 @@
 """Tools for loading, creating, and batching datasets with TensorFlow.
 
+todo(rpeloff) this code was hacked into a mess for the Eloff et al. (2018) paper and needs to be fixed/cleaned.
+
 Author: Ryan Eloff
 Contact: ryan.peter.eloff@gmail.com
 Date: Sepetember 2018
 """
 
 
-# Pull in functions from datasets directory into ml.datasets namespace:
+# Pull functions from data directory into ml.data namespace:
 
 # Functions from batch.py
 from .batch import batch_dataset
