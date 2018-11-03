@@ -8,47 +8,49 @@ Few-shot learning experiments on cross-modal vision-speech retrieval, where a gi
 Datasets
 --------
 
-Need to obtain the following datasets:
+The following datasets are required for these experiments:
 
-TIDigits: https://catalog.ldc.upenn.edu/LDC93S10
-Flickr audio: https://groups.csail.mit.edu/sls/downloads/flickraudio/
-Flickr8k text: http://nlp.cs.illinois.edu/HockenmaierGroup/Framing_Image_Description/Flickr8k_text.zip
+- [TIDigits](https://catalog.ldc.upenn.edu/LDC93S10)
+- [Flickr audio](https://groups.csail.mit.edu/sls/downloads/flickraudio/)
+- [Flickr8k text](http://nlp.cs.illinois.edu/HockenmaierGroup/Framing_Image_Description/Flickr8k_text.zip)
 
-Note that the Flickr8k text corpus is used purely for obatining the train/validation/test splits.
-The following instrcutions assume that you have obtained these datasets and placed them somewhere sensible (e.g. ../data/tidigits)
+Note that the Flickr8k text corpus is used purely for obtaining train/validation/test splits.
+The instructions that follow assume that you have obtained these datasets and placed them somewhere sensible (e.g. ../data/tidigits)
 
 Pre-requisites
 --------------
+The following steps need to be completed to run the experiment scripts:
 
-Install docker: https://docs.docker.com/engine/installation/
-Install nvidia-docker for GPU access in docker containers (version 2.x I think): https://github.com/NVIDIA/nvidia-docker
+1. Install [Docker](https://docs.docker.com/install/) (I also recommend following the [linux post-install step](https://docs.docker.com/install/linux/linux-postinstall/) to manage Docker as a non-root user)
 
-Pull docker images from Docker Hub:
-1. Kaldi docker image for extracting speech features https://hub.docker.com/r/reloff/kaldi/:
-`docker pull reloff/kaldi`
+2. Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) (version 2.0) for NVIDIA GPU access in docker containers
 
-2. TensorFlow docker image used as base image for research environment https://hub.docker.com/r/reloff/tensorflow-base/:
-`docker pull reloff/tensorflow-base`
+3. Pull required images from [Docker Hub](https://hub.docker.com):
 
-3. Multimodal one-shot research environment docker image https://hub.docker.com/r/reloff/multimodal-one-shot/:
-`docker pull reloff/multimodal-one-shot`
+| Docker image | Docker pull command |
+| ------------- | -------------------|
+| [Kaldi](https://hub.docker.com/r/reloff/kaldi) for extracting speech features | `docker pull reloff/kaldi:5.4` |
+| [TensorFlow](https://hub.docker.com/r/reloff/tensorflow-base) used as base for research environment | `docker pull reloff/tensorflow-base:1.11.0-py36-cuda90` |
+| [Multimodal one-shot research environment](https://hub.docker.com/r/reloff/multimodal-one-shot) | `docker pull reloff/multimodal-one-shot` |
 
 Alternatively you can build these images locally from their DockerFiles:
-1. https://github.com/rpeloff/research-images/blob/master/kaldi/Dockerfile 
-2. https://github.com/rpeloff/research-images/blob/master/tensorflow_base/python36_cuda90/Dockerfile
-3. https://github.com/rpeloff/multimodal-one-shot-learning/blob/master/docker/Dockerfile
+- [Kaldi Dockerfile](https://github.com/rpeloff/research-images/blob/master/kaldi/Dockerfile)
+- [TensorFlow Dockerfile](https://github.com/rpeloff/research-images/blob/master/tensorflow_base/python36_cuda90/Dockerfile)
+- [Multimodal one-shot research environment Dockerfile](https://github.com/rpeloff/multimodal-one-shot-learning/blob/master/docker/Dockerfile)
 
 Kaldi feature extraction
 ------------------------
 
 Extract speech features by simply running:
 
-`./run_feature_extraction.sh \
+```bash
+./run_feature_extraction.sh \
     --tidigits=<path to TIDigits> \
     --flickr-audio=<path to Flickr audio> \
     --flickr-text=<path to Flickr8k text> \
-    --n-cpu-cores=<number of CPU cores>`
+    --n-cpu-cores=<number of CPU cores>
+```
     
 Replace each path with the full path to the corresponding dataset (e.g. `--flickr-audio=/home/rpeloff/datasets/speech/flickr_audio`).
-The `--n-cpu-cores` flag specifies the number of CPU cores to use to speed up feature extraction (defaults to 8; set higher or lower depending on available CPU cores).
+The `--n-cpu-cores` flag specifies the number of CPU cores used for feature extraction (defaults to 8; set higher or lower depending on available CPU cores), where more cores may speed up the process.
 
