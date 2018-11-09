@@ -1,9 +1,13 @@
-Cross-Modal Few-Shot Learning
-=============================
+Multimodal One-Shot Learning of Speech and Images
+=================================================
 
 Overview
 --------
-Few-shot learning experiments on cross-modal vision-speech retrieval, where a given query in *one* modality is used to match an example with the most similar content from a (test) set of possible answers that are in *another modality*. This cross-modal matching is performed based on knowledge of another set of matching vision-speech examples (known as an acquisition set), where only one or a few matching examples are available per class.
+This repository contains the full code recipe for building models that can acquire novel concepts from only *one* paired audio-visual example per class, without receiving any hard labels. These models can then be used to match new continuous speech input to the correct visual instance (e.g. the spoken word "lego" is matched to the visual signal of *lego*, without any textual labels, and after only a single paried speech-image example of another *lego* instance). This is *multimodal one-shot learning*, a new task which we formalise in the following paper:
+
+- TBR
+
+Please cite this paper if you use the code.
 
 Datasets
 --------
