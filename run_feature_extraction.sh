@@ -95,6 +95,7 @@ if [ "${print_help_and_exit}" = true ]; then
     echo "Usage: run_feature_extraction.sh [OPTIONS]"
     echo ""
     echo "Extract TIDigits and Flickr-Audio features in a Kaldi Docker container"
+    echo "(Run script with sudo if Docker is not set up for non-root users)"
     echo ""
     echo "Options:"
     echo "        --tidigits dir        Path to the TIDigits data."
@@ -121,7 +122,8 @@ DOCKER_NAME=${DOCKER_NAME:-kaldi-feats-extract}
 
 
 # Print some information on selected options
-echo "Starting experiment notebook container!"
+echo "Extracting speech features!"
+echo "(Run script with sudo if Docker is not set up for non-root users)"
 echo ""
 echo "TIDigits directory: ${TIDIGITS_DIR}"
 echo "Flickr-Audio directory: ${FLICKR_DIR}"
@@ -132,14 +134,14 @@ echo ""
 
 
 # Start Docker feature extraction container
-# Note: run script as sudo if Docker not set up for non-root user
 docker run \
     -v ${TIDIGITS_DIR}:/tidigits \
     -v ${FLICKR_DIR}:/flickr_audio \
     -v ${FLICKR_TEXT_DIR}:/Flickr8k_text \
-    -v `pwd`/kaldi_features:/kaldi_features \
+    -v $(pwd)/kaldi_features:/kaldi_features \
     -e FEATURES_DIR=/kaldi_features \
     -e N_CPU_CORES=${N_CPU_CORES} \
+    -u $(id -u):$(id -g) \
     -it \
     --name ${DOCKER_NAME} \
     reloff/kaldi:5.4 \
