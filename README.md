@@ -45,7 +45,7 @@ Alternatively you can build these images locally from their DockerFiles:
 Kaldi feature extraction
 ------------------------
 
-Extract speech features by simply running:
+Extract speech features by simply running `run_feature_extraction [OPTIONS]` (use `--help` flag for more information):
 
 ```bash
 ./run_feature_extraction.sh \
@@ -55,6 +55,23 @@ Extract speech features by simply running:
     --n-cpu-cores=<number of CPU cores>
 ```
     
-Replace each path with the full path to the corresponding dataset (e.g. `--flickr-audio=/home/rpeloff/datasets/speech/flickr_audio`).
-The `--n-cpu-cores` flag specifies the number of CPU cores used for feature extraction (defaults to 8; set higher or lower depending on available CPU cores), where more cores may speed up the process.
+Replace each path with the full path to the corresponding dataset. The `--n-cpu-cores` flag specifies the number of CPU cores used for feature extraction (defaults to 8; set higher or lower depending on available CPU cores), where more cores may speed up the process. For example:
 
+```bash
+./run_feature_extraction.sh --tidigits=/home/rpeloff/datasets/datasets/speech/tidigits --flickr-audio=/home/rpeloff/datasets/speech/flickr_audio --flickr-text=/home/rpeloff/datasets/text/Flickr8k_text --n-cpu-cores=8
+```
+
+Train and test multimodal models
+--------------------------------
+
+Models are conveniently trained and tested in two separate Jupyter notebooks. To run these notebooks, execute the `run_notebooks.sh [OPTIONS]` script (use `--help` flag for more information),
+
+```bash
+./run_notebooks.sh --port=8888
+```
+
+and navigate to http://127.0.0.1:8888/. Follow the instructions in the notebooks ... (under construction)
+
+NOTE
+----
+This repo is under construction, and the notebooks that reproduce the experiments results from the paper are in the process of being cleaned for ease of use. All code used in the paper is present, so feel free to raise issues if you find any problem or have general comments! :)
