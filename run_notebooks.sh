@@ -125,13 +125,13 @@ echo ""
 # Start Docker research container
 # Note: run script as sudo if Docker not set up for non-root user
 nvidia-docker run \
-    -v $(pwd)/src:/multimodal_one_shot/src \
-    -v $(pwd)/kaldi_features:/multimodal_one_shot/kaldi_features \
-    -v $(pwd)/experiments:/multimodal_one_shot/experiments \
+    -v $(pwd):/multimodal_one_shot \
     -u $(id -u):$(id -g) \
+    -w /multimodal_one_shot \
     --rm \
     -it \
+    -e JUPYTER_DATA_DIR=/multimodal_one_shot/.jupyter \
     -p ${JUP_PORT}:${JUP_PORT} \
     --name ${DOCKER_NAME} \
     ${DOCKER_IMAGE} \
-    jupyter notebook --no-browser --ip=0.0.0.0 --port=${JUP_PORT} --NotebookApp.token=${JUP_PASS} --allow-root --notebook-dir='/multimodal_one_shot'
+    jupyter notebook --no-browser --ip=0.0.0.0 --port=${JUP_PORT} --NotebookApp.token=${JUP_PASS} --notebook-dir='/multimodal_one_shot/experiments'
