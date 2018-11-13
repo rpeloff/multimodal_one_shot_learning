@@ -5,7 +5,7 @@ Overview
 --------
 This repository contains the full code recipe for building models that can acquire novel concepts from only *one* paired audio-visual example per class, without receiving any hard labels. These models can then be used to match new continuous speech input to the correct visual instance (e.g. the spoken word "lego" is matched to the visual signal of *lego*, without any textual labels, and after only a single paried speech-image example of another *lego* instance). This is *multimodal one-shot learning*, a new task which we formalise in the following paper:
 
-- TBR
+- R. Eloff, H. A. Engelbrecht, H. Kamper, "Multimodal One-Shot Learning of Speech and Images," *arXiv preprint arXiv:1811.03875*, 2018. [[arXiv](https://arxiv.org/abs/1811.03875)]
 
 Please cite this paper if you use the code.
 
