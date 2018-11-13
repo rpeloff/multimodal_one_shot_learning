@@ -5,8 +5,6 @@ scikit-learn==0.20.0
 Cython==0.28.5
 matplotlib==3.0.0
 imageio==2.4.1
-requests==2.19.1
+requests==2.20.1
 tqdm==4.26.0
-# Install IPython manually since v7.x incompatible with prompt-toolkit v1.0.15
-ipython==6.5.0
 jupyter==1.0.0

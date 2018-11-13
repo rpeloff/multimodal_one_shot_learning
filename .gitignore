@@ -18,7 +18,7 @@
 !*.conf
 # Forced alignments
 !*.ctm
-# IPython Notebooks
+# IPython notebooks
 !*.ipynb
 # Dockerfile
 !docker/*
@@ -26,10 +26,11 @@
 !LICENSE
 
 # Files to ignore that were re-included in exceptions:
-# IPython Notebook Checkpoints
+# IPython notebook checkpoints
 *.ipynb_checkpoints*
-
-# Ignore extracted features from TIDigits
+# Scratch notebooks
+_*.ipynb
+# Ignore extracted features from TIDigits (needs to be obtained from LDC)
 kaldi_features/tidigits/features/*
 kaldi_features/tidigits/logs/*
 kaldi_features/tidigits/tidigits_audio.npz
