@@ -141,10 +141,11 @@ docker run \
     -v $(pwd)/kaldi_features:/kaldi_features \
     -e FEATURES_DIR=/kaldi_features \
     -e N_CPU_CORES=${N_CPU_CORES} \
-    -u $(id -u):$(id -g) \
     -it \
     --name ${DOCKER_NAME} \
     reloff/kaldi:5.4 \
-    /kaldi_features/extract_features.sh
+    /bin/bash -c \
+    "/kaldi_features/extract_features.sh ; \
+     chown -R $(id -u):$(id -g) /kaldi_features" 
 docker logs ${DOCKER_NAME} >& feature_extraction.log
-docker container rm ${DOCKER_NAME}
+docker container rm ${DOCKER_NAME} 
