@@ -3,7 +3,7 @@ Multimodal One-Shot Learning of Speech and Images
 
 Overview
 --------
-This repository contains the full code recipe for building models that can acquire novel concepts from only *one* paired audio-visual example per class, without receiving any hard labels. These models can then be used to match new continuous speech input to the correct visual instance (e.g. the spoken word "lego" is matched to the visual signal of *lego*, without any textual labels, and after only a single paried speech-image example of another *lego* instance). This is *multimodal one-shot learning*, a new task which we formalise in the following paper:
+This repository contains the full code recipe for building models that can acquire novel concepts from only *one* paired audio-visual example per class, without receiving any hard labels. These models can then be used to match new continuous speech input to the correct visual instance (e.g. the spoken word "lego" is matched to the visual signal of lego, without receiving any textual labels, and after seeing only a single paired speech-image example of a different *lego* instance). This is *multimodal one-shot learning*, a new task which we formalise in the following paper:
 
 - R. Eloff, H. A. Engelbrecht, H. Kamper, "Multimodal One-Shot Learning of Speech and Images," *arXiv preprint arXiv:1811.03875*, 2018. [[arXiv](https://arxiv.org/abs/1811.03875)]
 
@@ -19,11 +19,11 @@ The following datasets are required for these experiments:
 - [Flickr8k text](http://nlp.cs.illinois.edu/HockenmaierGroup/Framing_Image_Description/Flickr8k_text.zip)
 
 Note that the Flickr8k text corpus is used purely for obtaining train/validation/test splits.
-The instructions that follow assume that you have obtained these datasets and placed them somewhere sensible (e.g. ../data/tidigits)
+The instructions that follow assume that you have obtained these datasets and placed them somewhere sensible (e.g. ../data/tidigits).
 
 Pre-requisites
 --------------
-The following steps need to be completed to run the experiment scripts:
+The following steps need to be completed before running the experiment scripts:
 
 1. Install [Docker](https://docs.docker.com/install/) (I also recommend following the [linux post-install step](https://docs.docker.com/install/linux/linux-postinstall/) to manage Docker as a non-root user)
 
@@ -64,14 +64,22 @@ Replace each path with the full path to the corresponding dataset. The `--n-cpu-
 Train and test multimodal models
 --------------------------------
 
-Models are conveniently trained and tested in two separate Jupyter notebooks. To run these notebooks, execute the `run_notebooks.sh [OPTIONS]` script (use `--help` flag for more information),
+The multimodal one-shot models are demonstrated in two separate Jupyter notebooks:
+
+1. `experiments/nb1_unimodal_train_test.ipynb`  trains and tests unimodal models for one-shot speech or image classification
+
+2. `experiments/nb2_multimodal_test.ipynb`  extends unimodal models to the multimodal one-shot case, testing on one-shot cross-modal speech-image digit matching
+
+To run these notebooks and reproduce the results in the paper, execute the `run_notebooks.sh [OPTIONS]` script (use `--help` flag for more information),
 
 ```bash
 ./run_notebooks.sh --port=8888
 ```
 
-and navigate to http://127.0.0.1:8888/. Follow the instructions in the notebooks ... (under construction)
+and navigate to http://127.0.0.1:8888/. Follow the experiment notebooks and execute the code cells to train, test, and summarise the unimodal and multimodal one-shot models.
 
-NOTE
+Note
 ----
-This repo is under construction, and the notebooks that reproduce the experiments results from the paper are in the process of being cleaned for ease of use. All code used in the paper is present, so feel free to raise issues if you find any problem or have general comments! :)
+All code used for the paper is present in this repo, and the experiment notebooks should reproduce all results.
+If you find any mistakes in the code or notebooks, please let us know by raising an issue!
+Also feel free to raise issues if you have general comments! :smile:
