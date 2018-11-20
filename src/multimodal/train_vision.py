@@ -600,8 +600,10 @@ def train_few_shot_model(
             logging.info("Saved randomly initialized base model to file: {}"
                          "".format(first_saved))
     run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # allow gpu memory growth
     # Start tf.Session to train and validate model
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         # ----------------------------------------------------------------------
         # Load model and log some debug info:
         # ----------------------------------------------------------------------

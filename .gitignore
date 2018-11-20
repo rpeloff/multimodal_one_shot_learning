@@ -24,6 +24,8 @@
 !docker/*
 # License
 !LICENSE
+# Makefiles
+!Makefile
 
 # Files to ignore that were re-included in exceptions:
 # IPython notebook checkpoints
