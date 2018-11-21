@@ -123,8 +123,8 @@ echo ""
 
 
 # Start Docker research container
-# Note: run script as sudo if Docker not set up for non-root user
-nvidia-docker run \
+docker run \
+    --runtime=nvidia \
     -v $(pwd):/multimodal_one_shot \
     -u $(id -u):$(id -g) \
     -w /multimodal_one_shot \
